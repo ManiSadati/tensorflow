@@ -716,6 +716,7 @@ cc_library(
         "reference/integer_ops/add.h",
         "reference/integer_ops/conv.h",
         "reference/integer_ops/depthwise_conv.h",
+        "reference/integer_ops/fault_injection.h",
         "reference/integer_ops/fully_connected.h",
         "reference/integer_ops/l2normalization.h",
         "reference/integer_ops/logistic.h",

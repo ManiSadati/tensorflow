@@ -18,6 +18,7 @@ limitations under the License.
 #include <algorithm>
 
 #include "tensorflow/lite/kernels/internal/common.h"
+#include "fault_injection.h"
 
 namespace tflite {
 namespace reference_integer_ops {
@@ -50,6 +51,9 @@ void FullyConnectedPerChannel(
   const int output_depth = output_shape.Dims(1);
   TFLITE_DCHECK_LE(output_depth, filter_shape.Dims(filter_dim_count - 2));
   const int accum_depth = filter_shape.Dims(filter_dim_count - 1);
+
+  FaultInjection FI;
+  FI.init();
   for (int b = 0; b < batches; ++b) {
     for (int out_c = 0; out_c < output_depth; ++out_c) {
       BiasType acc = 0;
@@ -57,6 +61,7 @@ void FullyConnectedPerChannel(
         int32_t input_val = input_data[b * accum_depth + d];
         int32_t filter_val = filter_data[out_c * accum_depth + d];
         acc += filter_val * (input_val + input_offset);
+        acc = FI.doFaultInjection(acc);
       }
       if (bias_data) {
         acc += bias_data[out_c];
@@ -98,6 +103,8 @@ void FullyConnected(const FullyConnectedParams& params,
   const int output_depth = output_shape.Dims(output_dim_count - 1);
   TFLITE_DCHECK_LE(output_depth, filter_shape.Dims(filter_dim_count - 2));
   const int accum_depth = filter_shape.Dims(filter_dim_count - 1);
+  FaultInjection FI;
+  FI.init();
   for (int b = 0; b < batches; ++b) {
     for (int out_c = 0; out_c < output_depth; ++out_c) {
       BiasType acc = 0;
@@ -105,6 +112,7 @@ void FullyConnected(const FullyConnectedParams& params,
         int32_t input_val = input_data[b * accum_depth + d];
         int32_t filter_val = filter_data[out_c * accum_depth + d];
         acc += (filter_val + filter_offset) * (input_val + input_offset);
+        acc = FI.doFaultInjection(acc);
       }
       if (bias_data) {
         acc += bias_data[out_c];
@@ -118,6 +126,7 @@ void FullyConnected(const FullyConnectedParams& params,
           static_cast<OutputType>(acc_scaled);
     }
   }
+  FI.save_profile();
 }
 
 }  // namespace reference_integer_ops
