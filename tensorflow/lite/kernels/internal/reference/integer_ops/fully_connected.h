@@ -53,7 +53,6 @@ void FullyConnectedPerChannel(
   const int accum_depth = filter_shape.Dims(filter_dim_count - 1);
 
   FaultInjection FI;
-  FI.init();
   for (int b = 0; b < batches; ++b) {
     for (int out_c = 0; out_c < output_depth; ++out_c) {
       BiasType acc = 0;
@@ -104,7 +103,7 @@ void FullyConnected(const FullyConnectedParams& params,
   TFLITE_DCHECK_LE(output_depth, filter_shape.Dims(filter_dim_count - 2));
   const int accum_depth = filter_shape.Dims(filter_dim_count - 1);
   FaultInjection FI;
-  FI.init();
+  FI.init("FullyConnected");
   for (int b = 0; b < batches; ++b) {
     for (int out_c = 0; out_c < output_depth; ++out_c) {
       BiasType acc = 0;
