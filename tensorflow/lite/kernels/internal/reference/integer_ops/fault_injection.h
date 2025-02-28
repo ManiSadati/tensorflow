@@ -91,8 +91,7 @@ struct FaultInjection {
         }
     }
     
-    // template <typename T>
-    int32_t doFaultInjection(const int32_t value) {
+    int doFaultInjection(const int value) {
         if (!is_layer_valid)
             return value;
         if (mode == FIMode::Profiling) {
@@ -100,7 +99,8 @@ struct FaultInjection {
             return value;
         } else {
             if (current_count == trigger_count) {
-                int32_t new_value = value ^ (1<<fi_bit);
+                // int new_value = (fi_bit == 7)? (-value) : (value ^ (int)(1<<fi_bit));
+                int new_value = value ^ (int)(1<<fi_bit);
 
                 TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Injecting a Fault! (counter %d) (%d -> %d) \n",trigger_count,value, new_value);
                 current_count++;
