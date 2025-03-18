@@ -17,21 +17,18 @@ enum class FIMode { Profiling = 0 , Injection = 1 };
 struct FaultInjection {
     FIMode mode;
     std::string layer_name;
-    int current_count;
-    int trigger_count;
-    int fi_bit;
+    std::set <std::pair<std::pair<int, int>, int> > injectLocations; // {(x,y),bit}
     int layer_num = -1;
     bool is_layer_valid = false;
 
     void init(std::string layer_name_) {
-        current_count = 0;
         layer_name = layer_name_;
         layer_num = read_layer_num();
 
-
+        // This file reads whether program is in profiling mode or injection mode
         std::ifstream mode_file("./fi_mode.txt");
         std::string mode_string;
-        mode_file >> mode_string >> fi_bit;
+        mode_file >> mode_string;
         
         if (mode_string == "profiling") {
             mode = FIMode::Profiling;
@@ -47,24 +44,26 @@ struct FaultInjection {
         }
             
         if(mode == FIMode::Injection){
-            std::ifstream count_file("./fi_count.txt");
-            int lnum, tmp, total;
-            while(count_file >> lnum >> tmp){
-                if (lnum == layer_num){
-                    total = tmp;
+            /* 
+            The first line of this file would be the layer to be injected.
+            The rest of the file contains lines of 3 integers, x, y, bit.
+            x and y are the location of the element needs to be injected,
+            and bit is the injected bit. 
+            */
+            std::ifstream count_file("./fi_locations.txt");
+            int lnum;
+            if (count_file >> lnum && layer_num == lnum) {
+                int x, y, bit;
+                while (count_file >> x >> y >> bit) {
+                    injectLocations.insert({{x, y}, bit});
                 }
             }
             count_file.close();
-
-            std::random_device rd; 
-            std::mt19937 gen(rd()); 
-            std::uniform_int_distribution<> distrib(0, total);
-
-            trigger_count = distrib(gen);
         }
     }
 
     int read_layer_num(){
+        // This file reads which layer of the model we are processing
         std::ifstream layer_num_file("./fi_layer_num.txt");
         if (layer_num_file.is_open()) {
             layer_num_file >> layer_num;
@@ -81,34 +80,27 @@ struct FaultInjection {
         return layer_num;
     }
 
-    void save_profile() {
+    void save_profile(int x_dim, int y_dim) {
         if (mode == FIMode::Profiling && is_layer_valid){
 
-            TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "prof %d %d %d",is_layer_valid, layer_num, current_count);
-            std::ofstream count_file("./fi_count.txt", std::ios::app);
-            count_file << layer_num << " " << current_count << "\n";
+            TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "prof %d %d (%d, %d)",is_layer_valid, layer_num, x_dim, y_dim);
+            // This file saves the dimensions of the output matrix for the current layer
+            std::ofstream count_file("./fi_dimension.txt", std::ios::app);
+            count_file << layer_num << " " << x_dim << " " << y_dim << "\n";
             count_file.close();
         }
     }
     
-    int doFaultInjection(const int value) {
-        if (!is_layer_valid)
-            return value;
-        if (mode == FIMode::Profiling) {
-            current_count++;
-            return value;
-        } else {
-            if (current_count == trigger_count) {
-                // int new_value = (fi_bit == 7)? (-value) : (value ^ (int)(1<<fi_bit));
-                int new_value = value ^ (int)(1<<fi_bit);
-
-                TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Injecting a Fault! (counter %d) (%d -> %d) \n",trigger_count,value, new_value);
-                current_count++;
-                return new_value; 
-            }
-            current_count++;
-            return value;
-        }
+    bool isFaultyLayer(){
+        return (is_layer_valid && mode == FIMode::Injection);
+    }
+    
+    int doFaultInjection(const int value, const std::pair<std::pair<int,int>,int>& InjectionLoc) {
+        // int new_value = (fi_bit == 7)? (-value) : (value ^ (int)(1<<fi_bit));
+        int new_value = value ^ (1 << InjectionLoc.second);  
+        TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Injecting to loc <%d, %d> bit %d: (%d -> %d) \n",
+                        InjectionLoc.first.first, InjectionLoc.first.second, InjectionLoc.second, value, new_value);
+        return new_value;
     }
 };
 

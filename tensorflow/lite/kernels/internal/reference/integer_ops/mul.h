@@ -20,6 +20,8 @@ limitations under the License.
 #include "fixedpoint/fixedpoint.h"
 #include "ruy/profiler/instrumentation.h"  // from @ruy
 #include "tensorflow/lite/kernels/internal/common.h"
+#include "tensorflow/lite/minimal_logging.h"
+#include "fault_injection.h"
 
 namespace tflite {
 namespace reference_integer_ops {
@@ -27,10 +29,26 @@ namespace reference_integer_ops {
 // Maximum dimension supported by the broadcast mul operation.
 constexpr int kMaxMulBroadcastDim = 6;
 
+// Helper function to convert shape to string
+std::string ShapeToString2(const RuntimeShape& shape) {
+    std::ostringstream oss;
+    oss << '[';
+    for (int i = 0; i < shape.DimensionsCount(); ++i) {
+        if (i > 0) {
+            oss << ", ";
+        }
+        oss << shape.Dims(i);
+    }
+    oss << ']';
+    return oss.str();
+}
+
 template <typename InputType, typename OutputType>
 void MulElementwise(int size, const ArithmeticParams& params,
                     const InputType* input1_data, const InputType* input2_data,
                     OutputType* output_data) {
+  TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, " OP MUL1) %d\n",size);
+
   for (int i = 0; i < size; ++i) {
     const int32_t input1_val = params.input1_offset + input1_data[i];
     const int32_t input2_val = params.input2_offset + input2_data[i];
@@ -96,6 +114,15 @@ inline void BroadcastMul6DSlow(
     const T* input1_data, const RuntimeShape& input2_shape,
     const T* input2_data, const RuntimeShape& output_shape, T* output_data) {
   ruy::profiler::ScopeLabel label("BroadcastMul6DSlow");
+TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, " \nOP MUL3)");
+  // Log input, output, and filter shapes
+    std::string input_shape_str = ShapeToString2(input1_shape);
+    std::string output_shape_str = ShapeToString2(output_shape);
+    std::string filter_shape_str = ShapeToString2(input2_shape);
+
+    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Input Shape: %s", input_shape_str.c_str());
+    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Filter Shape: %s", filter_shape_str.c_str());
+    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Output Shape: %s", output_shape_str.c_str());
 
   NdArrayDesc<kMaxMulBroadcastDim> desc1;
   NdArrayDesc<kMaxMulBroadcastDim> desc2;
@@ -108,6 +135,9 @@ inline void BroadcastMul6DSlow(
   int32_t extended_output_shape_dims[kMaxMulBroadcastDim];
   std::memcpy(extended_output_shape_dims, extended_output_shape.DimsData(),
               sizeof(extended_output_shape_dims));
+
+    std::string extoutput_shape_str = ShapeToString2(extended_output_shape);
+    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "EXt Output Shape: %s", extoutput_shape_str.c_str());
 
   size_t input1_offset_a = 0;
   size_t input2_offset_a = 0;
@@ -178,6 +208,26 @@ inline void BroadcastMul6DSlow(
         extended_output_shape_dims[3] * extended_output_shape_dims[4] *
         extended_output_shape_dims[5];
   }
+
+
+  assert (extended_output_shape.DimensionsCount() == 6);  // Ensure the tensor is 6D
+  assert (extended_output_shape.Dims(0) + extended_output_shape.Dims(1) + extended_output_shape.Dims(2) + extended_output_shape.Dims(3) == 4);
+  const int x_dim = extended_output_shape.Dims(4);  // Second last dimension size
+  const int y_dim = extended_output_shape.Dims(5);  // Last dimension size
+  FaultInjection FI;
+  FI.init("BroadcastMul6DSlow");
+  FI.save_profile(x_dim, y_dim);
+
+  if (FI.isFaultyLayer()) {
+    for (const auto& p : FI.injectLocations) {
+      // y + y_dim*x
+      int index = p.first.second + y_dim * p.first.first;  
+      output_data[index] = static_cast<T>(FI.doFaultInjection(output_data[index], p));
+    }
+  }
+
+
+  
 }
 
 template <typename T>

@@ -16,6 +16,7 @@ limitations under the License.
 #define TENSORFLOW_LITE_KERNELS_INTERNAL_REFERENCE_INTEGER_OPS_FULLY_CONNECTED_H_
 
 #include <algorithm>
+#include <string>
 
 #include "tensorflow/lite/kernels/internal/common.h"
 #include "fault_injection.h"
@@ -40,6 +41,8 @@ void FullyConnectedPerChannel(
     OutputType* output_data) {
   const int32_t input_offset = params.input_offset;
   const int32_t output_offset = params.output_offset;
+
+TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, " OP FullyConnectedPerChannel) \n");
   const int32_t output_activation_min = params.quantized_activation_min;
   const int32_t output_activation_max = params.quantized_activation_max;
   TFLITE_DCHECK_GE(filter_shape.DimensionsCount(), 2);
@@ -52,7 +55,7 @@ void FullyConnectedPerChannel(
   TFLITE_DCHECK_LE(output_depth, filter_shape.Dims(filter_dim_count - 2));
   const int accum_depth = filter_shape.Dims(filter_dim_count - 1);
 
-  FaultInjection FI;
+
   for (int b = 0; b < batches; ++b) {
     for (int out_c = 0; out_c < output_depth; ++out_c) {
       BiasType acc = 0;
@@ -60,7 +63,6 @@ void FullyConnectedPerChannel(
         int32_t input_val = input_data[b * accum_depth + d];
         int32_t filter_val = filter_data[out_c * accum_depth + d];
         acc += filter_val * (input_val + input_offset);
-        acc = FI.doFaultInjection(acc);
       }
       if (bias_data) {
         acc += bias_data[out_c];
@@ -76,6 +78,20 @@ void FullyConnectedPerChannel(
   }
 }
 
+// Helper function to convert shape to string
+std::string ShapeToString(const RuntimeShape& shape) {
+    std::ostringstream oss;
+    oss << '[';
+    for (int i = 0; i < shape.DimensionsCount(); ++i) {
+        if (i > 0) {
+            oss << ", ";
+        }
+        oss << shape.Dims(i);
+    }
+    oss << ']';
+    return oss.str();
+}
+
 template <typename InputType, typename WeightType, typename OutputType,
           typename BiasType>
 void FullyConnected(const FullyConnectedParams& params,
@@ -85,6 +101,8 @@ void FullyConnected(const FullyConnectedParams& params,
                     const WeightType* filter_data,
                     const RuntimeShape& bias_shape, const BiasType* bias_data,
                     const RuntimeShape& output_shape, OutputType* output_data) {
+
+TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "\n OP FullyConnected) ");
   const int32_t input_offset = params.input_offset;
   const int32_t filter_offset = params.weights_offset;
   const int32_t output_offset = params.output_offset;
@@ -95,6 +113,16 @@ void FullyConnected(const FullyConnectedParams& params,
   TFLITE_DCHECK_GE(filter_shape.DimensionsCount(), 2);
   TFLITE_DCHECK_GE(output_shape.DimensionsCount(), 1);
 
+  // Log input, output, and filter shapes
+    std::string input_shape_str = ShapeToString(input_shape);
+    std::string output_shape_str = ShapeToString(output_shape);
+    std::string filter_shape_str = ShapeToString(filter_shape);
+
+    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Input Shape: %s", input_shape_str.c_str());
+    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Filter Shape: %s", filter_shape_str.c_str());
+    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Output Shape: %s", output_shape_str.c_str());
+
+
   TFLITE_DCHECK_LE(output_activation_min, output_activation_max);
   const int filter_dim_count = filter_shape.DimensionsCount();
   const int output_dim_count = output_shape.DimensionsCount();
@@ -102,8 +130,6 @@ void FullyConnected(const FullyConnectedParams& params,
   const int output_depth = output_shape.Dims(output_dim_count - 1);
   TFLITE_DCHECK_LE(output_depth, filter_shape.Dims(filter_dim_count - 2));
   const int accum_depth = filter_shape.Dims(filter_dim_count - 1);
-  FaultInjection FI;
-  FI.init("FullyConnected");
   for (int b = 0; b < batches; ++b) {
     for (int out_c = 0; out_c < output_depth; ++out_c) {
       BiasType acc = 0;
@@ -111,7 +137,6 @@ void FullyConnected(const FullyConnectedParams& params,
         int32_t input_val = input_data[b * accum_depth + d];
         int32_t filter_val = filter_data[out_c * accum_depth + d];
         acc += (filter_val + filter_offset) * (input_val + input_offset);
-        acc = FI.doFaultInjection(acc);
       }
       if (bias_data) {
         acc += bias_data[out_c];
@@ -125,7 +150,17 @@ void FullyConnected(const FullyConnectedParams& params,
           static_cast<OutputType>(acc_scaled);
     }
   }
-  FI.save_profile();
+
+  FaultInjection FI;
+  FI.init("FullyConnected");
+  FI.save_profile(batches, output_depth);
+  if (FI.isFaultyLayer()) {
+    for (const auto& p : FI.injectLocations) {
+      // out_c + output_depth * b
+      int index = p.first.second + output_depth * p.first.first;  
+      output_data[index] = FI.doFaultInjection(output_data[index], p);
+    }
+  }
 }
 
 }  // namespace reference_integer_ops
