@@ -33,7 +33,6 @@ template <typename InputType, typename OutputType>
 void MulElementwise(int size, const ArithmeticParams& params,
                     const InputType* input1_data, const InputType* input2_data,
                     OutputType* output_data) {
-  TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, " OP MUL1) %d\n",size);
 
   for (int i = 0; i < size; ++i) {
     const int32_t input1_val = params.input1_offset + input1_data[i];

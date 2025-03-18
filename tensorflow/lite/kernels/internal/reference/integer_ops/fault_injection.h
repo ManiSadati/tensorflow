@@ -30,6 +30,8 @@ struct FaultInjection {
         std::string mode_string;
         int num;
         mode_file >> mode_string >> num;
+        if (num == layer_num)
+            is_layer_valid = true;
         
         if (mode_string == "profiling") {
             mode = FIMode::Profiling;
@@ -37,7 +39,6 @@ struct FaultInjection {
         else {
             mode = FIMode::Injection;
         }
-            
         if(mode == FIMode::Injection){
             /* 
             The first line of this file would be the layer to be injected.
@@ -46,12 +47,9 @@ struct FaultInjection {
             and bit is the injected bit. 
             */
             std::ifstream count_file("./fi_locations.txt");
-            int lnum;
-            if (count_file >> lnum && layer_num == lnum) {
-                int x, y, bit;
-                while (count_file >> x >> y >> bit) {
-                    injectLocations.insert({{x, y}, bit});
-                }
+            int x, y, bit;
+            while (count_file >> x >> y >> bit) {
+                injectLocations.insert({{x, y}, bit});
             }
             count_file.close();
         }
