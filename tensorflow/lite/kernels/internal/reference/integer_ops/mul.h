@@ -29,20 +29,6 @@ namespace reference_integer_ops {
 // Maximum dimension supported by the broadcast mul operation.
 constexpr int kMaxMulBroadcastDim = 6;
 
-// Helper function to convert shape to string
-std::string ShapeToString2(const RuntimeShape& shape) {
-    std::ostringstream oss;
-    oss << '[';
-    for (int i = 0; i < shape.DimensionsCount(); ++i) {
-        if (i > 0) {
-            oss << ", ";
-        }
-        oss << shape.Dims(i);
-    }
-    oss << ']';
-    return oss.str();
-}
-
 template <typename InputType, typename OutputType>
 void MulElementwise(int size, const ArithmeticParams& params,
                     const InputType* input1_data, const InputType* input2_data,
@@ -114,16 +100,6 @@ inline void BroadcastMul6DSlow(
     const T* input1_data, const RuntimeShape& input2_shape,
     const T* input2_data, const RuntimeShape& output_shape, T* output_data) {
   ruy::profiler::ScopeLabel label("BroadcastMul6DSlow");
-TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, " \nOP MUL3)");
-  // Log input, output, and filter shapes
-    std::string input_shape_str = ShapeToString2(input1_shape);
-    std::string output_shape_str = ShapeToString2(output_shape);
-    std::string filter_shape_str = ShapeToString2(input2_shape);
-
-    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Input Shape: %s", input_shape_str.c_str());
-    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Filter Shape: %s", filter_shape_str.c_str());
-    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Output Shape: %s", output_shape_str.c_str());
-
   NdArrayDesc<kMaxMulBroadcastDim> desc1;
   NdArrayDesc<kMaxMulBroadcastDim> desc2;
   // The input shapes are extended as part of NdArrayDesc initialization.
@@ -135,9 +111,6 @@ TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, " \nOP MUL3)");
   int32_t extended_output_shape_dims[kMaxMulBroadcastDim];
   std::memcpy(extended_output_shape_dims, extended_output_shape.DimsData(),
               sizeof(extended_output_shape_dims));
-
-    std::string extoutput_shape_str = ShapeToString2(extended_output_shape);
-    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "EXt Output Shape: %s", extoutput_shape_str.c_str());
 
   size_t input1_offset_a = 0;
   size_t input2_offset_a = 0;

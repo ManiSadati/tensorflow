@@ -28,19 +28,14 @@ struct FaultInjection {
         // This file reads whether program is in profiling mode or injection mode
         std::ifstream mode_file("./fi_mode.txt");
         std::string mode_string;
-        mode_file >> mode_string;
+        int num;
+        mode_file >> mode_string >> num;
         
         if (mode_string == "profiling") {
             mode = FIMode::Profiling;
         }
         else {
             mode = FIMode::Injection;
-        }
-        int num;
-        while (mode_file >> num) {
-            if(layer_num == num){
-                is_layer_valid = true;
-            }
         }
             
         if(mode == FIMode::Injection){
@@ -86,7 +81,7 @@ struct FaultInjection {
             TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "prof %d %d (%d, %d)",is_layer_valid, layer_num, x_dim, y_dim);
             // This file saves the dimensions of the output matrix for the current layer
             std::ofstream count_file("./fi_dimension.txt", std::ios::app);
-            count_file << layer_num << " " << x_dim << " " << y_dim << "\n";
+            count_file << layer_name << " " << layer_num << " " << x_dim << " " << y_dim << "\n";
             count_file.close();
         }
     }

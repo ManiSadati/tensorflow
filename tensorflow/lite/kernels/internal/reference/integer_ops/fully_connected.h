@@ -41,8 +41,6 @@ void FullyConnectedPerChannel(
     OutputType* output_data) {
   const int32_t input_offset = params.input_offset;
   const int32_t output_offset = params.output_offset;
-
-TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, " OP FullyConnectedPerChannel) \n");
   const int32_t output_activation_min = params.quantized_activation_min;
   const int32_t output_activation_max = params.quantized_activation_max;
   TFLITE_DCHECK_GE(filter_shape.DimensionsCount(), 2);
@@ -78,19 +76,6 @@ TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, " OP FullyConnectedPerChannel) \n");
   }
 }
 
-// Helper function to convert shape to string
-std::string ShapeToString(const RuntimeShape& shape) {
-    std::ostringstream oss;
-    oss << '[';
-    for (int i = 0; i < shape.DimensionsCount(); ++i) {
-        if (i > 0) {
-            oss << ", ";
-        }
-        oss << shape.Dims(i);
-    }
-    oss << ']';
-    return oss.str();
-}
 
 template <typename InputType, typename WeightType, typename OutputType,
           typename BiasType>
@@ -102,7 +87,6 @@ void FullyConnected(const FullyConnectedParams& params,
                     const RuntimeShape& bias_shape, const BiasType* bias_data,
                     const RuntimeShape& output_shape, OutputType* output_data) {
 
-TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "\n OP FullyConnected) ");
   const int32_t input_offset = params.input_offset;
   const int32_t filter_offset = params.weights_offset;
   const int32_t output_offset = params.output_offset;
@@ -112,15 +96,6 @@ TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "\n OP FullyConnected) ");
   const int32_t output_activation_max = params.quantized_activation_max;
   TFLITE_DCHECK_GE(filter_shape.DimensionsCount(), 2);
   TFLITE_DCHECK_GE(output_shape.DimensionsCount(), 1);
-
-  // Log input, output, and filter shapes
-    std::string input_shape_str = ShapeToString(input_shape);
-    std::string output_shape_str = ShapeToString(output_shape);
-    std::string filter_shape_str = ShapeToString(filter_shape);
-
-    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Input Shape: %s", input_shape_str.c_str());
-    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Filter Shape: %s", filter_shape_str.c_str());
-    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Output Shape: %s", output_shape_str.c_str());
 
 
   TFLITE_DCHECK_LE(output_activation_min, output_activation_max);
