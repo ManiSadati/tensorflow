@@ -18,6 +18,8 @@ limitations under the License.
 #include <algorithm>
 
 #include "tensorflow/lite/kernels/internal/common.h"
+#include "tensorflow/lite/minimal_logging.h"
+#include "fault_injection.h"
 
 namespace tflite {
 namespace reference_integer_ops {
@@ -64,6 +66,7 @@ inline void TransposeConv(
   // 'scatter' based trick as in float version.
   memset(scratch_buffer, 0, num_elements * sizeof(int32_t));
 
+  int cnt = 0;
   // Loop through input elements one at a time.
   for (int batch = 0; batch < batches; ++batch) {
     for (int in_y = 0; in_y < input_height; ++in_y) {
@@ -90,6 +93,7 @@ inline void TransposeConv(
                   scratch_buffer[Offset(output_shape, batch, out_y, out_x,
                                         out_channel)] +=
                       (input_value + input_offset) * filter_value;
+                  cnt ++;
                 }
               }
             }
@@ -119,6 +123,21 @@ inline void TransposeConv(
       }
     }
   }
+
+  TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "TransposeConv: %d %d %d %d\n", batches, output_height, output_width, output_depth);
+
+  FaultInjection FI;
+  FI.init("TransposeConv");
+  FI.save_profile(output_depth, output_width, output_height, cnt);
+
+  if (FI.isFaultyLayer()) {
+    for (const auto& p : FI.injectLocations) {
+      // output_shape, batch, out_y, out_x, out_channel
+      int index = Offset(output_shape, 0, p.first.second.second, p.first.second.first, p.first.first);
+      output_data[index] = FI.doFaultInjection(output_data[index], p);
+    }
+  }
+
 }
 
 // int16_t input (zero_point=0), int8_t filter, int32 or int64 accumulator

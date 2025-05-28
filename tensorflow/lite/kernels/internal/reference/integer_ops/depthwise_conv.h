@@ -18,6 +18,8 @@ limitations under the License.
 #include <algorithm>
 
 #include "tensorflow/lite/kernels/internal/common.h"
+#include "tensorflow/lite/minimal_logging.h"
+#include "fault_injection.h"
 
 namespace tflite {
 namespace reference_integer_ops {
@@ -60,6 +62,7 @@ inline void DepthwiseConvPerChannel(
   TFLITE_DCHECK_EQ(output_depth, input_depth * depth_multiplier);
   TFLITE_DCHECK_EQ(bias_shape.FlatSize(), output_depth);
 
+  int cnt = 0;
   for (int batch = 0; batch < batches; ++batch) {
     for (int out_y = 0; out_y < output_height; ++out_y) {
       for (int out_x = 0; out_x < output_width; ++out_x) {
@@ -100,6 +103,7 @@ inline void DepthwiseConvPerChannel(
                   // TODO(b/174275578): Add a check to make sure the
                   // accumulator depth is smaller than 2^16.
                   acc += filter_val * (input_val + input_offset);
+                  cnt ++;
                 }
               }
             }
@@ -119,6 +123,20 @@ inline void DepthwiseConvPerChannel(
       }
     }
   }
+    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "DepthwiseConvPerChannel: %d %d %d %d \n", batches, output_depth, output_height, output_width, output_depth);
+
+  FaultInjection FI;
+  FI.init("DepthwiseConvPerChannel");
+  FI.save_profile(output_depth, output_width, output_height, cnt);
+
+  if (FI.isFaultyLayer()) {
+    for (const auto& p : FI.injectLocations) {
+      // output_shape, batch, out_y, out_x, out_channel
+      int index = Offset(output_shape, 0, p.first.second.second, p.first.second.first, p.first.first);
+      output_data[index] = FI.doFaultInjection(output_data[index], p);
+    }
+  }
+
 }
 
 inline void DepthwiseConvPerChannel(

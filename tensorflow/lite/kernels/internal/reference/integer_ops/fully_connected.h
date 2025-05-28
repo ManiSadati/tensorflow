@@ -105,6 +105,7 @@ void FullyConnected(const FullyConnectedParams& params,
   const int output_depth = output_shape.Dims(output_dim_count - 1);
   TFLITE_DCHECK_LE(output_depth, filter_shape.Dims(filter_dim_count - 2));
   const int accum_depth = filter_shape.Dims(filter_dim_count - 1);
+  int cnt = 0;
   for (int b = 0; b < batches; ++b) {
     for (int out_c = 0; out_c < output_depth; ++out_c) {
       BiasType acc = 0;
@@ -112,6 +113,7 @@ void FullyConnected(const FullyConnectedParams& params,
         int32_t input_val = input_data[b * accum_depth + d];
         int32_t filter_val = filter_data[out_c * accum_depth + d];
         acc += (filter_val + filter_offset) * (input_val + input_offset);
+        cnt ++;
       }
       if (bias_data) {
         acc += bias_data[out_c];
@@ -128,11 +130,11 @@ void FullyConnected(const FullyConnectedParams& params,
 
   FaultInjection FI;
   FI.init("FullyConnected");
-  FI.save_profile(batches, output_depth);
+  FI.save_profile(1, batches, output_depth, cnt);
   if (FI.isFaultyLayer()) {
     for (const auto& p : FI.injectLocations) {
       // out_c + output_depth * b
-      int index = p.first.second + output_depth * p.first.first;  
+      int index = p.first.second.second + output_depth * p.first.second.first;  
       output_data[index] = FI.doFaultInjection(output_data[index], p);
     }
   }

@@ -114,6 +114,7 @@ inline void BroadcastMul6DSlow(
   size_t input1_offset_a = 0;
   size_t input2_offset_a = 0;
   size_t output_offset_a = 0;
+  int cnt = 0;
   for (int a = 0; a < extended_output_shape_dims[0]; ++a) {
     size_t input1_offset_d = input1_offset_a;
     size_t input2_offset_d = input2_offset_a;
@@ -144,6 +145,7 @@ inline void BroadcastMul6DSlow(
                   MultiplyByQuantizedMultiplier(input1_val * input2_val,
                                                 params.output_multiplier,
                                                 params.output_shift);
+              cnt ++;
               const int32_t clamped_output = std::min(
                   params.quantized_activation_max,
                   std::max(params.quantized_activation_min, unclamped_result));
@@ -188,12 +190,12 @@ inline void BroadcastMul6DSlow(
   const int y_dim = extended_output_shape.Dims(5);  // Last dimension size
   FaultInjection FI;
   FI.init("BroadcastMul6DSlow");
-  FI.save_profile(x_dim, y_dim);
+  FI.save_profile(1, x_dim, y_dim, cnt);
 
   if (FI.isFaultyLayer()) {
     for (const auto& p : FI.injectLocations) {
       // y + y_dim*x
-      int index = p.first.second + y_dim * p.first.first;  
+      int index = p.first.second.second + y_dim * p.first.second.first;  
       output_data[index] = static_cast<T>(FI.doFaultInjection(output_data[index], p));
     }
   }
