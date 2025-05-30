@@ -123,7 +123,7 @@ inline void DepthwiseConvPerChannel(
       }
     }
   }
-    TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "DepthwiseConvPerChannel: %d %d %d %d \n", batches, output_depth, output_height, output_width, output_depth);
+    // TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "DepthwiseConvPerChannel: %d %d %d %d \n", batches, output_depth, output_height, output_width, output_depth);
 
   FaultInjection FI;
   FI.init("DepthwiseConvPerChannel");
