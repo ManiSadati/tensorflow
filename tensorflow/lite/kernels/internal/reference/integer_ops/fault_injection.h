@@ -26,7 +26,7 @@ struct FaultInjection {
         layer_num = read_layer_num();
 
         // This file reads whether program is in profiling mode or injection mode
-        std::ifstream mode_file("./fi_mode.txt");
+        std::ifstream mode_file("./fi/mode.txt");
         std::string mode_string;
         int num;
         mode_file >> mode_string >> num;
@@ -46,7 +46,7 @@ struct FaultInjection {
             c is the output channel, x and y are the location of the element 
             needs to be injected, and bit is the injected bit. 
             */
-            std::ifstream count_file("./fi_locations.txt");
+            std::ifstream count_file("./fi/locations.txt");
             int x, y, c, bit;
             while (count_file >> c >> x >> y >> bit) {
                 injectLocations.insert({{c, {x, y}}, bit});
@@ -57,7 +57,7 @@ struct FaultInjection {
 
     int read_layer_num(){
         // This file reads which layer of the model we are processing
-        std::ifstream layer_num_file("./fi_layer_num.txt");
+        std::ifstream layer_num_file("./fi/layer_num.txt");
         if (layer_num_file.is_open()) {
             layer_num_file >> layer_num;
             layer_num_file.close();
@@ -65,7 +65,7 @@ struct FaultInjection {
 
         layer_num;
 
-        std::ofstream layer_num_file_out("./fi_layer_num.txt");
+        std::ofstream layer_num_file_out("./fi/layer_num.txt");
         if (layer_num_file_out.is_open()) {
             layer_num_file_out << layer_num + 1;
             layer_num_file_out.close();
@@ -78,7 +78,7 @@ struct FaultInjection {
 
             TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "prof %d (%d, %d, %d) %d", layer_num, c_dim, x_dim, y_dim, numOps);
             // This file saves the dimensions of the output matrix for the current layer
-            std::ofstream count_file("./fi_dimension.txt", std::ios::app);
+            std::ofstream count_file("./fi/dimension.txt", std::ios::app);
             count_file << layer_name << " " << layer_num << " " << c_dim << " " << x_dim << " " << y_dim << " " << numOps << "\n";
             count_file.close();
         }
