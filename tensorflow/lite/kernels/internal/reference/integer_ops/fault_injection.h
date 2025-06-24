@@ -18,21 +18,36 @@ struct FaultInjection {
     FIMode mode;
     std::string layer_name;
     std::set <std::pair<std::pair<int, std::pair<int, int> >, int> > injectLocations; // {{c,(x,y)},bit}
-    int layer_num = 0;
+    int current_layer_num = 0;
+    int fault_layer, img_index, iteration;
+    std::string fault_type;
     bool is_layer_valid = false;
+    bool is_layer_logged = false;
 
     void init(std::string layer_name_) {
         layer_name = layer_name_;
-        layer_num = read_layer_num();
+        current_layer_num = read_layer_num();
 
         // This file reads whether program is in profiling mode or injection mode
         std::ifstream mode_file("./fi/mode.txt");
         std::string mode_string;
-        int num;
-        mode_file >> mode_string >> num;
-        if (num == layer_num)
+        mode_file >> mode_string >> fault_layer >> img_index >> fault_type >> iteration;
+        if (fault_layer == current_layer_num)
             is_layer_valid = true;
-        
+        mode_file.close();
+
+        // check if the current layer should be logged
+        std::ifstream layer_output_file("./fi/layer_output_list.txt");
+        int l;
+        while(layer_output_file >> l) {
+            if(current_layer_num == l) {
+                is_layer_logged = true;
+                break;
+            }
+        }
+        layer_output_file.close();
+
+
         if (mode_string == "profiling") {
             mode = FIMode::Profiling;
         }
@@ -59,33 +74,37 @@ struct FaultInjection {
         // This file reads which layer of the model we are processing
         std::ifstream layer_num_file("./fi/layer_num.txt");
         if (layer_num_file.is_open()) {
-            layer_num_file >> layer_num;
+            layer_num_file >> current_layer_num;
             layer_num_file.close();
         } 
 
-        layer_num;
+        current_layer_num;
 
         std::ofstream layer_num_file_out("./fi/layer_num.txt");
         if (layer_num_file_out.is_open()) {
-            layer_num_file_out << layer_num + 1;
+            layer_num_file_out << current_layer_num + 1;
             layer_num_file_out.close();
         }
-        return layer_num;
+        return current_layer_num;
     }
 
     void save_profile(int c_dim, int x_dim, int y_dim, int numOps) {
         if (mode == FIMode::Profiling && is_layer_valid){
 
-            TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "prof %d (%d, %d, %d) %d", layer_num, c_dim, x_dim, y_dim, numOps);
+            TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "prof %d (%d, %d, %d) %d", current_layer_num, c_dim, x_dim, y_dim, numOps);
             // This file saves the dimensions of the output matrix for the current layer
             std::ofstream count_file("./fi/dimension.txt", std::ios::app);
-            count_file << layer_name << " " << layer_num << " " << c_dim << " " << x_dim << " " << y_dim << " " << numOps << "\n";
+            count_file << layer_name << " " << current_layer_num << " " << c_dim << " " << x_dim << " " << y_dim << " " << numOps << "\n";
             count_file.close();
         }
     }
 
     bool isFaultyLayer(){
         return (is_layer_valid && mode == FIMode::Injection);
+    }
+
+    bool isLoggedLayer() {
+        return (is_layer_logged);
     }
     
     int doFaultInjection(const int value, const std::pair<std::pair<int, std::pair<int, int> >, int>& InjectionLoc) {
@@ -95,6 +114,21 @@ struct FaultInjection {
                         InjectionLoc.first.first, InjectionLoc.first.second.first, InjectionLoc.first.second.second, InjectionLoc.second, value, new_value);
         return new_value;
     }
+
+    template <typename OutputType>
+    void log_layer_output(const OutputType* output_data, int c_dim, int x_dim, int y_dim) {
+        std::ofstream output_file("./fi/output_" + std::to_string(current_layer_num) + "-" + std::to_string(fault_layer) + "-" + std::to_string(img_index) + "-" + fault_type + "-" + std::to_string(iteration) + ".txt", std::ios::app);
+        for ( int c = 0; c < c_dim; ++c) {
+            for (int x = 0; x < x_dim; ++x) {
+                for (int y = 0; y < y_dim; ++y) {
+                    int index = c * x_dim * y_dim + x * y_dim + y;
+                    output_file << output_data[index] << " ";
+                }
+                output_file << "\n";
+            }
+        }
+        output_file.close();
+    }   
 };
 
 #endif  // TFLITE_FAULT_INJECTION_H_

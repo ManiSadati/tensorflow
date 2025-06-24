@@ -138,6 +138,18 @@ void FullyConnected(const FullyConnectedParams& params,
       output_data[index] = FI.doFaultInjection(output_data[index], p);
     }
   }
+
+  if(FI.isLoggedLayer()){
+    std::ofstream output_file("./fi/output_" + std::to_string(FI.current_layer_num) + "-" + std::to_string(FI.fault_layer) + "-" + std::to_string(FI.img_index) + "-" + FI.fault_type + "-" + std::to_string(FI.iteration) + ".txt", std::ios::app);
+    output_file << 1 << " " << batches << " " << output_depth << "\n";
+    for(int i = 0; i < batches; i++){
+      for(int j = 0; j < output_depth; j++){
+        output_file << (int)output_data[j + output_depth * i] << " ";
+      }
+      output_file << "\n";
+    }
+    output_file.close();
+  }
 }
 
 }  // namespace reference_integer_ops

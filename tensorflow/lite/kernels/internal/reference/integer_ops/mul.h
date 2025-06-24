@@ -200,7 +200,17 @@ inline void BroadcastMul6DSlow(
     }
   }
 
-
+  if(FI.isLoggedLayer()){
+    std::ofstream output_file("./fi/output_" + std::to_string(FI.current_layer_num) + "-" + std::to_string(FI.fault_layer) + "-" + std::to_string(FI.img_index) + "-" + FI.fault_type + "-" + std::to_string(FI.iteration) + ".txt", std::ios::app);
+    output_file << 1 << " " << x_dim << " " << y_dim << "\n";
+    for(int i = 0; i < x_dim; i++){
+      for(int j = 0; j < y_dim; j++){
+        output_file << (int)output_data[j + y_dim * i] << " ";
+      }
+      output_file << "\n";
+    }
+    output_file.close();
+  }
   
 }
 

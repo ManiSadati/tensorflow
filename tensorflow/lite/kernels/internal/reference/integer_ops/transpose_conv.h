@@ -137,6 +137,20 @@ inline void TransposeConv(
       output_data[index] = FI.doFaultInjection(output_data[index], p);
     }
   }
+  
+  if(FI.isLoggedLayer()){
+    std::ofstream output_file("./fi/output_" + std::to_string(FI.current_layer_num) + "-" + std::to_string(FI.fault_layer) + "-" + std::to_string(FI.img_index) + "-" + FI.fault_type + "-" + std::to_string(FI.iteration) + ".txt", std::ios::app);
+    output_file << output_depth << " " << output_width << " " << output_height << "\n";
+    for (int c = 0; c < output_depth; c++){
+      for (int x = 0; x < output_width; x++){
+        for (int y = 0; y < output_height; y++){
+          output_file << (int) output_data[Offset(output_shape, 0, y, x, c)] << " ";
+        }
+        output_file << "\n";
+      }
+    }
+    output_file.close();
+  }
 
 }
 
