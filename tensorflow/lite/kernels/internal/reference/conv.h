@@ -19,6 +19,8 @@ limitations under the License.
 
 #include "tensorflow/lite/kernels/internal/common.h"
 #include "tensorflow/lite/kernels/internal/types.h"
+#include "tensorflow/lite/kernels/internal/reference/integer_ops/fault_injection.h"
+
 
 namespace tflite {
 
@@ -115,6 +117,7 @@ inline void Conv(const ConvParams& params, const RuntimeShape& input_shape,
                  const int32_t* bias_data, const RuntimeShape& output_shape,
                  uint8_t* output_data, const RuntimeShape& im2col_shape,
                  uint8_t* im2col_data, void* cpu_backend_context) {
+
   (void)cpu_backend_context;  // only used in optimized code.
   (void)im2col_data;          // only used in optimized code.
   (void)im2col_shape;         // only used in optimized code.
@@ -152,6 +155,7 @@ inline void Conv(const ConvParams& params, const RuntimeShape& input_shape,
   const int filters_per_group = output_depth / groups;
   const int output_height = output_shape.Dims(1);
   const int output_width = output_shape.Dims(2);
+  int cnt = 0;
   for (int batch = 0; batch < batches; ++batch) {
     for (int out_y = 0; out_y < output_height; ++out_y) {
       const int in_y_origin = (out_y * stride_height) - pad_height;
@@ -183,6 +187,7 @@ inline void Conv(const ConvParams& params, const RuntimeShape& input_shape,
                     filter_shape, out_channel, filter_y, filter_x, in_channel)];
                 acc +=
                     (filter_val + filter_offset) * (input_val + input_offset);
+                cnt ++;
               }
             }
           }
@@ -199,6 +204,32 @@ inline void Conv(const ConvParams& params, const RuntimeShape& input_shape,
         }
       }
     }
+  }
+
+  FaultInjection FI;
+  FI.init("ConvBasic");
+  FI.save_profile(output_depth, output_width, output_height, cnt);
+
+  if (FI.isFaultyLayer()) {
+    for (const auto& p : FI.injectLocations) {
+      // output_shape, batch, out_y, out_x, out_channel
+      int index = Offset(output_shape, 0, p.first.second.second, p.first.second.first, p.first.first);
+      output_data[index] = FI.doFaultInjection(output_data[index], p);
+    }
+  }
+
+  if(FI.isLoggedLayer()){
+    std::ofstream output_file("./fi/output_" + std::to_string(FI.current_layer_num) + "-" + std::to_string(FI.fault_layer) + "-" + std::to_string(FI.img_index) + "-" + FI.fault_type + "-" + std::to_string(FI.iteration) + ".txt", std::ios::app);
+    output_file << output_depth << " " << output_width << " " << output_height << "\n";
+    for (int c = 0; c < output_depth; c++){
+      for (int x = 0; x < output_width; x++){
+        for (int y = 0; y < output_height; y++){
+          output_file << (int) output_data[Offset(output_shape, 0, y, x, c)] << " ";
+        }
+        output_file << "\n";
+      }
+    }
+    output_file.close();
   }
 }
 
