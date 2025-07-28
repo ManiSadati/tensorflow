@@ -1014,6 +1014,8 @@ cc_library(
     compatible_with = get_compatible_with_portable(),
     copts = tflite_copts(),
     deps = [
+        "//tensorflow/lite:minimal_logging",
+        "//tensorflow/lite:logger",
         ":cpu_backend_context",
         ":op_macros",
         "//tensorflow/lite/core/c:common",
