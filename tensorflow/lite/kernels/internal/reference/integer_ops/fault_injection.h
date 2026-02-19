@@ -13,22 +13,46 @@ namespace fs = std::filesystem;
 
 enum class FIMode { Profiling = 0 , Injection = 1 };
 
-
+/*
+ * FaultInjection is a lightweight helper used inside TFLite kernels.
+ *
+ * Contract / Mental model:
+ *  - Python controls runs by writing files under ./fi/
+ *  - layer_num.txt is a global "op counter" incremented once per kernel call.
+ *    Each kernel invocation constructs FaultInjection and calls init(), which:
+ *      1) reads current layer index from layer_num.txt
+ *      2) increments layer_num.txt (so next op sees next index)
+ *  - mode.txt determines whether we are profiling or injecting and which layer index is targeted.
+ *  - locations.txt lists injection coordinates for the targeted layer.
+ */
 struct FaultInjection {
-    FIMode mode;
+    FIMode mode = FIMode::Profiling;
     std::string layer_name;
-    std::set <std::pair<std::pair<int, std::pair<int, int> >, int> > injectLocations; // {{c,(x,y)},bit}
-    int current_layer_num = 0;
+
+    // injectLocations stores the tensor elements to inject faults.
+    // Each location is: {{c, {x, y}}, bit}
+    // Interpretation of (c, x, y) depends on the op (e.g., for FC you may map c=1).
+    std::set <std::pair<std::pair<int, std::pair<int, int> >, int> > injectLocations;
+      
+    // Derived state for this kernel invocation
+    int current_layer_num = 0; // The "op index" for this invocation
     int fault_layer, img_index, iteration;
     std::string fault_type;
-    bool is_layer_valid = false;
-    bool is_layer_logged = false;
 
+    bool is_layer_valid = false; // true if current_layer_num == fault_layer
+    bool is_layer_logged = false; // true if current_layer_num appears in layer_output_list.txt
+
+    
     void init(std::string layer_name_) {
         layer_name = layer_name_;
+
+        // Determine this kernel's "op index"
         current_layer_num = read_layer_num();
 
-        // This file reads whether program is in profiling mode or injection mode
+        // --- Read mode.txt ---
+        // Expected format:
+        //   profiling <fault_layer> <img_index> None <iteration>
+        //   injection <fault_layer> <img_index> <fault_type> <iteration>
         std::ifstream mode_file("./fi/mode.txt");
         std::string mode_string;
         mode_file >> mode_string >> fault_layer >> img_index >> fault_type >> iteration;
@@ -55,11 +79,11 @@ struct FaultInjection {
             mode = FIMode::Injection;
         }
         if(mode == FIMode::Injection){
-            /* 
-            The first line of this file would be the layer to be injected.
-            The rest of the file contains lines of 4 integers, c, x, y, bit.
-            c is the output channel, x and y are the location of the element 
-            needs to be injected, and bit is the injected bit. 
+            /*
+            * locations.txt format: each line "c x y bit"
+            * c: channel index (or 0 for 2D tensors)
+            * x,y: coordinates within output tensor
+            * bit: bit position to flip (0..N-1)
             */
             std::ifstream count_file("./fi/locations.txt");
             int x, y, c, bit;
@@ -70,7 +94,9 @@ struct FaultInjection {
         }
     }
 
+    // read layer counter and print the new value.
     int read_layer_num(){
+
         // This file is read to determine which layer of the model we are processing
         std::ifstream layer_num_file("./fi/layer_num.txt");
         if (layer_num_file.is_open()) {
@@ -87,6 +113,7 @@ struct FaultInjection {
         return current_layer_num;
     }
 
+    // Save profiling data for the *target* layer only.
     void save_profile(int c_dim, int x_dim, int y_dim, int numOps) {
         if (mode == FIMode::Profiling && is_layer_valid){
 
@@ -106,7 +133,8 @@ struct FaultInjection {
         return (is_layer_logged);
     }
 
-    // value = fi_value_to_change, InjectionLoc = {{fi_c,(fi_x,fi_y)},fi_bit}
+    // Flip a specific bit of an integer output element.
+    // InjectionLoc = {{c,(x,y)},bit}
     int doFaultInjection(const int value, const std::pair<std::pair<int, std::pair<int, int> >, int>& InjectionLoc) {
         // int new_value = (fi_bit == 7)? (-value) : (value ^ (int)(1<<fi_bit));
         int new_value = value ^ (1 << InjectionLoc.second); 
