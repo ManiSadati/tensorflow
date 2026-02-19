@@ -71,15 +71,14 @@ struct FaultInjection {
     }
 
     int read_layer_num(){
-        // This file reads which layer of the model we are processing
+        // This file is read to determine which layer of the model we are processing
         std::ifstream layer_num_file("./fi/layer_num.txt");
         if (layer_num_file.is_open()) {
             layer_num_file >> current_layer_num;
             layer_num_file.close();
         } 
 
-        current_layer_num;
-
+        // Then, we write the index of the next layer into the file.
         std::ofstream layer_num_file_out("./fi/layer_num.txt");
         if (layer_num_file_out.is_open()) {
             layer_num_file_out << current_layer_num + 1;
@@ -106,7 +105,8 @@ struct FaultInjection {
     bool isLoggedLayer() {
         return (is_layer_logged);
     }
-    
+
+    // value = fi_value_to_change, InjectionLoc = {{fi_c,(fi_x,fi_y)},fi_bit}
     int doFaultInjection(const int value, const std::pair<std::pair<int, std::pair<int, int> >, int>& InjectionLoc) {
         // int new_value = (fi_bit == 7)? (-value) : (value ^ (int)(1<<fi_bit));
         int new_value = value ^ (1 << InjectionLoc.second); 
