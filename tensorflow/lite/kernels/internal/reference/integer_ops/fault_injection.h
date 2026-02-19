@@ -143,20 +143,6 @@ struct FaultInjection {
         return new_value;
     }
 
-    template <typename OutputType>
-    void log_layer_output(const OutputType* output_data, int c_dim, int x_dim, int y_dim) {
-        std::ofstream output_file("./fi/output_" + std::to_string(current_layer_num) + "-" + std::to_string(fault_layer) + "-" + std::to_string(img_index) + "-" + fault_type + "-" + std::to_string(iteration) + ".txt", std::ios::app);
-        for ( int c = 0; c < c_dim; ++c) {
-            for (int x = 0; x < x_dim; ++x) {
-                for (int y = 0; y < y_dim; ++y) {
-                    int index = c * x_dim * y_dim + x * y_dim + y;
-                    output_file << output_data[index] << " ";
-                }
-                output_file << "\n";
-            }
-        }
-        output_file.close();
-    }   
 };
 
 #endif  // TFLITE_FAULT_INJECTION_H_
