@@ -137,33 +137,58 @@ inline void ConvPerChannel(
       }
     }
   }
-      // TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "ConvPerChannel: %d %d %d %d \n", batches, output_depth, output_height, output_width, output_depth);
 
+   // -------------------- Fault Injection (FI) --------------------
+  // Convention for Conv output (NHWC, batch fixed to 0):
+  //   c = out_channel (output_depth)
+  //   x = out_x       (output_width)
+  //   y = out_y       (output_height)
+  //
+  // locations.txt lines are: "c x y bit" following the convention above.
   FaultInjection FI;
   FI.init("ConvPerChannel");
-  FI.save_profile(output_depth, output_width, output_height, cnt);
 
+  // Profiling: record output tensor dimensions + number of MACs (cnt) for this op.
+  FI.save_profile(/*c_dim=*/output_depth,
+                  /*x_dim=*/output_width,
+                  /*y_dim=*/output_height,
+                  /*numOps=*/cnt);
+
+  // Injection: apply bitflip(s) to selected output elements.
   if (FI.isFaultyLayer()) {
     for (const auto& p : FI.injectLocations) {
-      // output_shape, batch, out_y, out_x, out_channel
-      int index = Offset(output_shape, 0, p.first.second.second, p.first.second.first, p.first.first);
+      const int c = p.first.first;            // out_channel
+      const int x = p.first.second.first;     // out_x
+      const int y = p.first.second.second;    // out_y
+      const int index = Offset(output_shape, /*b=*/0, /*y=*/y, /*x=*/x, /*c=*/c);
       output_data[index] = FI.doFaultInjection(output_data[index], p);
     }
   }
 
-  if(FI.isLoggedLayer()){
-    std::ofstream output_file("./fi/output_" + std::to_string(FI.current_layer_num) + "-" + std::to_string(FI.fault_layer) + "-" + std::to_string(FI.img_index) + "-" + FI.fault_type + "-" + std::to_string(FI.iteration) + ".txt", std::ios::app);
-    output_file << output_depth << " " << output_width << " " << output_height << "\n";
-    for (int c = 0; c < output_depth; c++){
-      for (int x = 0; x < output_width; x++){
-        for (int y = 0; y < output_height; y++){
-          output_file << (int) output_data[Offset(output_shape, 0, y, x, c)] << " ";
+  // Logging: dump output tensor if requested (again: batch=0).
+  if (FI.isLoggedLayer()) {
+    auto out = FI.open_output_file();
+
+    // Header required by your Python reader: "<c_dim> <x_dim> <y_dim>"
+    FaultInjection::write_header(out,
+                                 /*c_dim=*/output_depth,
+                                 /*x_dim=*/output_width,
+                                 /*y_dim=*/output_height);
+
+    // Write values in loop order: c -> x -> y
+    for (int c = 0; c < output_depth; ++c) {
+      for (int x = 0; x < output_width; ++x) {
+        for (int y = 0; y < output_height; ++y) {
+          out << static_cast<int>(
+                     output_data[Offset(output_shape, /*b=*/0, /*y=*/y, /*x=*/x, /*c=*/c)])
+              << " ";
         }
-        output_file << "\n";
+        out << "\n";
       }
     }
-    output_file.close();
   }
+  // ------------------ End Fault Injection (FI) ------------------
+  
 
 }
 

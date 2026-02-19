@@ -144,20 +144,24 @@ void FullyConnected(const FullyConnectedParams& params,
   FI.save_profile(/*c_dim=*/1, /*x_dim=*/batches, /*y_dim=*/output_depth, /*numOps=*/cnt);
 
   // Injection: locations.txt stores tuples (c, x, y, bit).
-  //
-  // We map (x, y) -> flat index in output_data:
   //   index = y + output_depth * x
   if (FI.isFaultyLayer()) {
     for (const auto& p : FI.injectLocations) {
-      // out_c + output_depth * b
-      int index = p.first.second.second + output_depth * p.first.second.first;  
+      const int c = p.first.first;           // should be 0 for FC
+      const int x = p.first.second.first;    // "batches" dimension
+      const int y = p.first.second.second;   // output neuron index
+
+      assert(c==0);
+
+      const int index = y + output_depth * x;
+
+      // No explicit cast: keep old behavior (implicit conversion back to element type).
       output_data[index] = FI.doFaultInjection(output_data[index], p);
     }
   }
 
   // Optional logging: dump the output tensor for this op invocation when requested.
-  if(FI.isLoggedLayer()){
-
+  if (FI.isLoggedLayer()) {
     // Open canonical FI output file:
     // ./fi/output_<currentLayer>-<faultLayer>-<img>-<type>-<iter>.txt
     auto out = FI.open_output_file();
@@ -167,9 +171,8 @@ void FullyConnected(const FullyConnectedParams& params,
                                 /*c_dim=*/1,
                                 /*x_dim=*/batches,
                                 /*y_dim=*/output_depth);
-  
-     
-    // Write values in loop order: c -> x -> y
+                                
+    // We omit the c loop since c_dim == 1.
     for (int x = 0; x < batches; ++x) {
       for (int y = 0; y < output_depth; ++y) {
         out << static_cast<int>(output_data[y + output_depth * x]) << " ";
@@ -177,7 +180,7 @@ void FullyConnected(const FullyConnectedParams& params,
       out << "\n";
     }
   }
-}
+  // ------------------ End Fault Injection (FI) ------------------
 
 }  // namespace reference_integer_ops
 }  // namespace tflite

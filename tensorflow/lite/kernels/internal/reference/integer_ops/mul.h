@@ -184,33 +184,60 @@ inline void BroadcastMul6DSlow(
   }
 
 
-  assert (extended_output_shape.DimensionsCount() == 6);  // Ensure the tensor is 6D
-  assert (extended_output_shape.Dims(0) + extended_output_shape.Dims(1) + extended_output_shape.Dims(2) + extended_output_shape.Dims(3) == 4);
-  const int x_dim = extended_output_shape.Dims(4);  // Second last dimension size
-  const int y_dim = extended_output_shape.Dims(5);  // Last dimension size
+  // extended_output_shape is expected to be 6D.
+  // The first four dims are a broadcast "prefix" that should flatten to 1 element.
+  // The last two dims (Dims(4), Dims(5)) form the 2D logical output we log/inject into.
+  assert(extended_output_shape.DimensionsCount() == 6);
+  assert(extended_output_shape.Dims(0) + extended_output_shape.Dims(1) +
+            extended_output_shape.Dims(2) + extended_output_shape.Dims(3) ==
+        4);  // NOTE: this implies each of the first 4 dims is 1.
+
+  // Define logical 2D view (x_dim, y_dim) over output.
+  const int x_dim = extended_output_shape.Dims(4);
+  const int y_dim = extended_output_shape.Dims(5);
+
+  // -------------------- Fault Injection (FI) --------------------
+  // Convention for BroadcastMul6DSlow output (batch/prefix collapsed):
+  //   c_dim = 1
+  //   x = [0 .. x_dim-1]
+  //   y = [0 .. y_dim-1]
+  // locations.txt lines: "c x y bit" where c must be 0.
   FaultInjection FI;
   FI.init("BroadcastMul6DSlow");
-  FI.save_profile(1, x_dim, y_dim, cnt);
+  FI.save_profile(/*c_dim=*/1, /*x_dim=*/x_dim, /*y_dim=*/y_dim, /*numOps=*/cnt);
 
   if (FI.isFaultyLayer()) {
     for (const auto& p : FI.injectLocations) {
-      // y + y_dim*x
-      int index = p.first.second.second + y_dim * p.first.second.first;  
-      output_data[index] = static_cast<T>(FI.doFaultInjection(output_data[index], p));
+      const int c = p.first.first;          // must be 0 (since c_dim=1)
+      const int x = p.first.second.first;   // Dims(4)
+      const int y = p.first.second.second;  // Dims(5)
+
+      assert(c==0);
+
+      // Flatten (x,y) into the linear output buffer (row-major with stride y_dim).
+      const int index = y + y_dim * x;
+
+      // No explicit cast: keep old behavior (implicit conversion back to element type).
+      output_data[index] = FI.doFaultInjection(output_data[index], p);
     }
   }
 
-  if(FI.isLoggedLayer()){
-    std::ofstream output_file("./fi/output_" + std::to_string(FI.current_layer_num) + "-" + std::to_string(FI.fault_layer) + "-" + std::to_string(FI.img_index) + "-" + FI.fault_type + "-" + std::to_string(FI.iteration) + ".txt", std::ios::app);
-    output_file << 1 << " " << x_dim << " " << y_dim << "\n";
-    for(int i = 0; i < x_dim; i++){
-      for(int j = 0; j < y_dim; j++){
-        output_file << (int)output_data[j + y_dim * i] << " ";
+  if (FI.isLoggedLayer()) {
+    auto out = FI.open_output_file();
+
+    // Header required by Python reader: "<c_dim> <x_dim> <y_dim>"
+    FaultInjection::write_header(out, /*c_dim=*/1, /*x_dim=*/x_dim, /*y_dim=*/y_dim);
+
+    // Write values for a (1, x_dim, y_dim) tensor.
+    // We omit c loop since c_dim == 1.
+    for (int x = 0; x < x_dim; ++x) {
+      for (int y = 0; y < y_dim; ++y) {
+        out << static_cast<int>(output_data[y + y_dim * x]) << " ";
       }
-      output_file << "\n";
+      out << "\n";
     }
-    output_file.close();
   }
+  // ------------------ End Fault Injection (FI) ------------------
   
 }
 
