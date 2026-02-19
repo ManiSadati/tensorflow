@@ -143,6 +143,20 @@ struct FaultInjection {
         return new_value;
     }
 
+    // Opens canonical FI output file:
+    // ./fi/output_<currentLayer>-<faultLayer>-<img>-<type>-<iter>.txt
+    std::ofstream open_output_file() const {
+        return std::ofstream("./fi/output_" + std::to_string(current_layer_num) + "-" +
+                                std::to_string(fault_layer) + "-" +
+                                std::to_string(img_index) + "-" + fault_type + "-" +
+                                std::to_string(iteration) + ".txt",
+                            std::ios::app);
+    }
+
+    // Writes header required by Python reader: "<c_dim> <x_dim> <y_dim>\n"
+    static void write_header(std::ofstream& out, int c_dim, int x_dim, int y_dim) {
+        out << c_dim << " " << x_dim << " " << y_dim << "\n";
+    }
 };
 
 #endif  // TFLITE_FAULT_INJECTION_H_
