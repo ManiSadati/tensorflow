@@ -128,9 +128,25 @@ void FullyConnected(const FullyConnectedParams& params,
     }
   }
 
+  // -------------------- Fault Injection (FI) --------------------
+  // FI uses a global op counter (./fi/layer_num.txt) to assign a unique "layer index"
+  // to each kernel invocation during inference. Python selects the target layer by
+  // writing ./fi/mode.txt with a fault_layer index. If current_layer_num == fault_layer,
+  // this op becomes the target for profiling / injection.
   FaultInjection FI;
   FI.init("FullyConnected");
-  FI.save_profile(1, batches, output_depth, cnt);
+
+  // Profiling: record output tensor dimensions for this op invocation (only if this op
+  // matches the requested fault_layer and mode == profiling).
+  //
+  // c_dim = 1 (FullyConnected output is effectively [batches, output_depth])
+  // numOps is a rough count of MACs (accum_depth * batches * output_depth).
+  FI.save_profile(/*c_dim=*/1, /*x_dim=*/batches, /*y_dim=*/output_depth, /*numOps=*/cnt);
+
+  // Injection: locations.txt stores tuples (c, x, y, bit).
+  //
+  // We map (x, y) -> flat index in output_data:
+  //   index = y + output_depth * x
   if (FI.isFaultyLayer()) {
     for (const auto& p : FI.injectLocations) {
       // out_c + output_depth * b
@@ -139,16 +155,27 @@ void FullyConnected(const FullyConnectedParams& params,
     }
   }
 
+  // Optional logging: dump the output tensor for this op invocation when requested.
   if(FI.isLoggedLayer()){
-    std::ofstream output_file("./fi/output_" + std::to_string(FI.current_layer_num) + "-" + std::to_string(FI.fault_layer) + "-" + std::to_string(FI.img_index) + "-" + FI.fault_type + "-" + std::to_string(FI.iteration) + ".txt", std::ios::app);
-    output_file << 1 << " " << batches << " " << output_depth << "\n";
-    for(int i = 0; i < batches; i++){
-      for(int j = 0; j < output_depth; j++){
-        output_file << (int)output_data[j + output_depth * i] << " ";
+
+    // Open canonical FI output file:
+    // ./fi/output_<currentLayer>-<faultLayer>-<img>-<type>-<iter>.txt
+    auto out = FI.open_output_file();
+
+    // Header required by Python reader: "<c_dim> <x_dim> <y_dim>"
+    FaultInjection::write_header(out,
+                                /*c_dim=*/1,
+                                /*x_dim=*/batches,
+                                /*y_dim=*/output_depth);
+  
+     
+    // Write values in loop order: c -> x -> y
+    for (int x = 0; x < batches; ++x) {
+      for (int y = 0; y < output_depth; ++y) {
+        out << static_cast<int>(output_data[y + output_depth * x]) << " ";
       }
-      output_file << "\n";
+      out << "\n";
     }
-    output_file.close();
   }
 }
 
