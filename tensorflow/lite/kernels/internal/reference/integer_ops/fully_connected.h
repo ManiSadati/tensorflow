@@ -171,7 +171,7 @@ void FullyConnected(const FullyConnectedParams& params,
                                 /*c_dim=*/1,
                                 /*x_dim=*/batches,
                                 /*y_dim=*/output_depth);
-                                
+
     // We omit the c loop since c_dim == 1.
     for (int x = 0; x < batches; ++x) {
       for (int y = 0; y < output_depth; ++y) {
@@ -181,6 +181,7 @@ void FullyConnected(const FullyConnectedParams& params,
     }
   }
   // ------------------ End Fault Injection (FI) ------------------
+}
 
 }  // namespace reference_integer_ops
 }  // namespace tflite
