@@ -117,7 +117,7 @@ struct FaultInjection {
     void save_profile(int c_dim, int x_dim, int y_dim, int numOps) {
         if (mode == FIMode::Profiling && is_layer_valid){
 
-            TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "prof %d (%d, %d, %d) %d", current_layer_num, c_dim, x_dim, y_dim, numOps);
+            TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "      Profiling Layer %d (%d, %d, %d) %d", current_layer_num, c_dim, x_dim, y_dim, numOps);
             // This file saves the dimensions of the output matrix for the current layer
             std::ofstream count_file("./fi/dimension.txt", std::ios::app);
             count_file << layer_name << " " << current_layer_num << " " << c_dim << " " << x_dim << " " << y_dim << " " << numOps << "\n";
@@ -138,7 +138,7 @@ struct FaultInjection {
     int doFaultInjection(const int value, const std::pair<std::pair<int, std::pair<int, int> >, int>& InjectionLoc) {
         // int new_value = (fi_bit == 7)? (-value) : (value ^ (int)(1<<fi_bit));
         int new_value = value ^ (1 << InjectionLoc.second); 
-        TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "Injecting to loc <%d, %d, %d> bit %d: (%d -> %d) \n",
+        TFLITE_LOG_PROD(tflite::TFLITE_LOG_INFO, "      Injecting to loc <%d, %d, %d> bit %d: (%d -> %d) \n",
                         InjectionLoc.first.first, InjectionLoc.first.second.first, InjectionLoc.first.second.second, InjectionLoc.second, value, new_value);
         return new_value;
     }
